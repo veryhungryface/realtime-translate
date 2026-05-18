@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>마이크 권한 — Realtime Translator</title>
+<style>
+  body {
+    margin: 0; min-height: 100vh;
+    background: #0f1115; color: #e6e8ee;
+    font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Noto Sans KR", sans-serif;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .card {
+    max-width: 480px; padding: 32px;
+    background: #181c24; border: 1px solid #2a2f3a; border-radius: 12px;
+  }
+  h1 { font-size: 20px; margin: 0 0 12px 0; }
+  p { color: #8a92a3; line-height: 1.55; margin: 0 0 18px 0; font-size: 14px; }
+  button {
+    background: #5b9dff; color: white; border: none;
+    padding: 12px 22px; border-radius: 8px; font-size: 15px; font-weight: 600;
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .ok { color: #4ade80; }
+  .err { color: #f87171; margin-top: 12px; font-size: 13px; }
+  .hint { font-size: 12px; color: #8a92a3; margin-top: 16px; line-height: 1.5; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>🎙️ 마이크 권한이 필요합니다</h1>
+    <p>한국어 음성을 인식해서 자막을 만들기 위해 마이크 접근 권한이 필요합니다. 권한은 한 번만 부여하면 다음부터는 자동으로 사용됩니다.</p>
+    <button id="grantBtn">마이크 권한 허용하기</button>
+    <div id="msg"></div>
+    <p class="hint">버튼을 누르면 Chrome 주소창 아래에 권한 요청 팝업이 표시됩니다. <b>허용</b>을 눌러주세요. 잘못해서 <b>차단</b>을 눌렀다면 주소창 왼쪽 자물쇠 → 마이크 → 허용으로 변경하세요.</p>
+  </div>
+<script src="permission.js"></script>
+</body>
+</html>

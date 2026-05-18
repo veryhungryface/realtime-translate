@@ -23,6 +23,6 @@
     }
   ],
   "web_accessible_resources": [
-    { "resources": ["offscreen.html"], "matches": ["<all_urls>"] }
+    { "resources": ["offscreen.html", "permission.html"], "matches": ["<all_urls>"] }
   ]
 }

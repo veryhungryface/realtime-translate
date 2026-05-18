@@ -32,13 +32,38 @@ async function broadcastToTabs(msg) {
   }
 }
 
+async function openPermissionTab() {
+  const url = chrome.runtime.getURL("permission.html");
+  // 이미 열려있으면 그것을 활성화
+  const existing = await chrome.tabs.query({ url });
+  if (existing.length) {
+    await chrome.tabs.update(existing[0].id, { active: true });
+    await chrome.windows.update(existing[0].windowId, { focused: true });
+    return;
+  }
+  await chrome.tabs.create({ url });
+}
+
+function isPermissionError(err) {
+  const s = (err || "").toString().toLowerCase();
+  return s.includes("permission") || s.includes("notallowed") || s.includes("dismissed") || s.includes("denied");
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   (async () => {
     if (msg.type === "start") {
       try {
         await ensureOffscreen();
         const r = await chrome.runtime.sendMessage({ type: "offscreen-start", cfg: msg.cfg });
-        if (!r?.ok) throw new Error(r?.error || "offscreen 시작 실패");
+        if (!r?.ok) {
+          if (isPermissionError(r?.error)) {
+            await closeOffscreen();
+            await openPermissionTab();
+            sendResponse({ ok: false, error: "마이크 권한이 필요합니다. 새 탭에서 '허용' 후 다시 시작해주세요." });
+            return;
+          }
+          throw new Error(r?.error || "offscreen 시작 실패");
+        }
         running = true;
         await broadcastToTabs({ type: "overlay-show" });
         sendResponse({ ok: true });
@@ -47,6 +72,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         await closeOffscreen();
         sendResponse({ ok: false, error: e.message });
       }
+      return;
+    }
+    if (msg.type === "mic-granted") {
+      sendResponse({ ok: true });
       return;
     }
     if (msg.type === "stop") {
