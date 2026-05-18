@@ -11,8 +11,13 @@
     host = document.createElement("div");
     host.id = HOST_ID;
     host.style.cssText = `
-      position: fixed; top: 0; left: 0; right: 0; z-index: 2147483647;
-      pointer-events: none;
+      position: fixed !important;
+      top: 0 !important; left: 0 !important; right: 0 !important;
+      width: 100vw !important;
+      z-index: 2147483647 !important;
+      pointer-events: none !important;
+      transform: none !important;
+      margin: 0 !important; padding: 0 !important;
     `;
     shadow = host.attachShadow({ mode: "open" });
     shadow.innerHTML = `
@@ -20,22 +25,34 @@
         :host { all: initial; }
         .bar {
           font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Pretendard", "Noto Sans KR", sans-serif;
-          background: rgba(0, 0, 0, 0.82);
+          background: rgba(0, 0, 0, 0.88);
           color: #fff;
-          padding: 10px 24px;
-          min-height: 28px;
-          display: flex; align-items: center; justify-content: center;
+          padding: 12px 24px;
+          min-height: 32px;
+          display: flex; align-items: center; justify-content: center; gap: 14px;
           font-size: 28px; font-weight: 700; line-height: 1.35;
           text-align: center;
           letter-spacing: -0.005em;
           backdrop-filter: blur(8px);
           -webkit-backdrop-filter: blur(8px);
-          border-bottom: 1px solid rgba(255,255,255,0.08);
+          border-bottom: 2px solid rgba(91, 157, 255, 0.4);
           pointer-events: auto;
           user-select: text;
           cursor: default;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.4);
         }
-        .bar.streaming::after {
+        .live {
+          font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 4px;
+          background: #4ade80; color: #000; letter-spacing: 0.05em;
+          animation: pulse 1.8s ease-in-out infinite;
+          flex-shrink: 0;
+        }
+        @keyframes pulse { 50% { opacity: 0.5; } }
+        #text:empty::before {
+          content: "통역 대기 중 · 한국어로 말씀하세요";
+          color: rgba(255,255,255,0.5); font-weight: 500; font-size: 22px;
+        }
+        .bar.streaming #text::after {
           content: "▍"; color: #5b9dff; margin-left: 6px;
           animation: blink 1s steps(1) infinite;
         }
@@ -45,13 +62,25 @@
           line-height: 1.55;
         }
         .bar.hidden { display: none; }
+        .close {
+          position: absolute; right: 8px; top: 8px;
+          width: 22px; height: 22px; border: none; border-radius: 4px;
+          background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.6);
+          font-size: 14px; cursor: pointer; line-height: 1;
+        }
+        .close:hover { background: rgba(255,255,255,0.22); color: #fff; }
       </style>
-      <div class="bar hidden" id="bar" dir="auto"><span id="text"></span></div>
+      <div class="bar hidden" id="bar" dir="auto">
+        <span class="live">● LIVE</span>
+        <span id="text"></span>
+        <button class="close" id="close" title="이 탭에서 자막 숨김 (더블클릭으로 토글)">✕</button>
+      </div>
     `;
     bar = shadow.getElementById("bar");
     text = shadow.getElementById("text");
     bar.addEventListener("dblclick", () => bar.classList.toggle("hidden"));
-    document.documentElement.appendChild(host);
+    shadow.getElementById("close").addEventListener("click", () => bar.classList.add("hidden"));
+    (document.body || document.documentElement).appendChild(host);
   }
 
   function show() { ensureBar(); bar.classList.remove("hidden"); }

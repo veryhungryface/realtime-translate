@@ -32,6 +32,19 @@ async function broadcastToTabs(msg) {
   }
 }
 
+async function injectContentToAllTabs() {
+  const tabs = await chrome.tabs.query({});
+  for (const t of tabs) {
+    if (!t.id || !t.url) continue;
+    if (/^(chrome|edge|about|chrome-extension|devtools):/i.test(t.url)) continue;
+    if (t.url.startsWith("https://chrome.google.com/webstore")) continue;
+    try {
+      await chrome.scripting.executeScript({ target: { tabId: t.id }, files: ["content.js"] });
+      await chrome.scripting.insertCSS({ target: { tabId: t.id }, files: ["content.css"] });
+    } catch (_) { /* 일부 페이지(403, 로그인 페이지 등)는 거부 — 무시 */ }
+  }
+}
+
 async function openPermissionTab() {
   const url = chrome.runtime.getURL("permission.html");
   // 이미 열려있으면 그것을 활성화
@@ -65,6 +78,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           throw new Error(r?.error || "offscreen 시작 실패");
         }
         running = true;
+        await injectContentToAllTabs();
         await broadcastToTabs({ type: "overlay-show" });
         sendResponse({ ok: true });
       } catch (e) {
