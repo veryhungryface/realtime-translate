@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>Realtime Translator</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #181c24;
+    --border: #2a2f3a;
+    --text: #e6e8ee;
+    --muted: #8a92a3;
+    --accent: #5b9dff;
+    --ok: #4ade80;
+    --err: #f87171;
+  }
+  body {
+    margin: 0; width: 320px; padding: 14px 14px 12px;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Noto Sans KR", sans-serif;
+    font-size: 13px;
+  }
+  h1 { font-size: 14px; margin: 0 0 12px 0; font-weight: 600; }
+  label { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; color: var(--muted); font-size: 12px; }
+  input, select {
+    background: var(--panel); color: var(--text);
+    border: 1px solid var(--border); border-radius: 5px;
+    padding: 6px 8px; font-size: 13px;
+  }
+  .row { display: flex; gap: 8px; margin-top: 8px; }
+  button {
+    flex: 1; background: var(--accent); color: white; border: none;
+    padding: 9px 0; border-radius: 6px; font-size: 13px; font-weight: 600;
+    cursor: pointer;
+  }
+  button.secondary { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  #status {
+    margin-top: 10px; padding: 8px; border-radius: 5px; font-size: 12px;
+    background: var(--panel); color: var(--muted);
+  }
+  #status.live { color: var(--ok); border-left: 3px solid var(--ok); }
+  #status.err { color: var(--err); border-left: 3px solid var(--err); }
+  .hint { font-size: 11px; color: var(--muted); margin-top: 6px; line-height: 1.4; }
+</style>
+</head>
+<body>
+  <h1>🎙️ 실시간 한→다국어 통역</h1>
+
+  <label>OpenAI API 키
+    <input id="apiKey" type="password" placeholder="sk-..." autocomplete="off" />
+  </label>
+
+  <label>번역 언어
+    <select id="lang">
+      <option value="en">English</option>
+      <option value="ar">العربية (아랍어)</option>
+      <option value="ja">日本語 (일본어)</option>
+      <option value="zh">中文 (중국어)</option>
+      <option value="es">Español (스페인어)</option>
+      <option value="fr">Français (프랑스어)</option>
+    </select>
+  </label>
+
+  <label>음성
+    <select id="voice">
+      <option value="marin">marin (여)</option>
+      <option value="cedar">cedar (남)</option>
+      <option value="alloy">alloy</option>
+      <option value="ash">ash</option>
+      <option value="coral">coral</option>
+      <option value="sage">sage</option>
+      <option value="verse">verse</option>
+      <option value="shimmer">shimmer</option>
+    </select>
+  </label>
+
+  <label>발화 감지
+    <select id="vad">
+      <option value="semantic">Semantic VAD (소음에 강함)</option>
+      <option value="server">Server VAD (기본)</option>
+    </select>
+  </label>
+
+  <label style="flex-direction: row; align-items: center; gap: 8px;">
+    <input id="muteTts" type="checkbox" style="width: auto;" />
+    <span style="color: var(--text); font-size: 13px;">번역 음성 끄기 (자막만)</span>
+  </label>
+
+  <div class="row">
+    <button id="startBtn">시작</button>
+    <button id="stopBtn" class="secondary" disabled>중지</button>
+  </div>
+
+  <div id="status">대기 중</div>
+  <p class="hint">시작하면 모든 탭 상단에 얇은 자막 바가 표시됩니다. 자막 바를 더블클릭하면 숨김.</p>
+
+<script src="popup.js"></script>
+</body>
+</html>

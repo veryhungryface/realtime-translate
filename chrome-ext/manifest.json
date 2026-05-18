@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Realtime Translator",
+  "version": "0.1.0",
+  "description": "한국어로 말하면 임의 페이지 상단에 선택한 언어의 자막이 실시간으로 표시됩니다.",
+  "permissions": ["offscreen", "storage", "scripting", "activeTab", "tabs"],
+  "host_permissions": ["<all_urls>", "https://api.openai.com/*"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Realtime Translator"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "web_accessible_resources": [
+    { "resources": ["offscreen.html"], "matches": ["<all_urls>"] }
+  ]
+}
