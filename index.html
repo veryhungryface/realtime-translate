@@ -1,0 +1,730 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>실시간 한→영 통역기</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #181c24;
+    --border: #2a2f3a;
+    --text: #e6e8ee;
+    --muted: #8a92a3;
+    --accent: #5b9dff;
+    --ok: #4ade80;
+    --err: #f87171;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Pretendard", "Noto Sans KR", sans-serif;
+    display: flex; flex-direction: column;
+  }
+  header {
+    display: flex; align-items: center; gap: 16px;
+    padding: 14px 20px; border-bottom: 1px solid var(--border);
+  }
+  header h1 { font-size: 16px; font-weight: 600; margin: 0; flex: 1; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+  .dot.live { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+  .dot.err { background: var(--err); }
+  button {
+    background: var(--accent); color: white; border: none;
+    padding: 8px 16px; border-radius: 6px; font-size: 14px; cursor: pointer;
+    font-weight: 500;
+  }
+  button.secondary { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  main {
+    flex: 1; display: grid; grid-template-columns: 1fr; gap: 1px;
+    background: var(--border); overflow: hidden;
+  }
+  main.show-ko { grid-template-columns: 320px 1fr; }
+  .panel { background: var(--panel); padding: 20px; overflow-y: auto; display: flex; flex-direction: column; }
+  #koPanel { display: none; }
+  main.show-ko #koPanel { display: flex; }
+  .panel h2 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--muted); margin: 0 0 12px 0; font-weight: 600;
+  }
+  .history { flex: 1; }
+  .turn {
+    padding: 10px 0; border-bottom: 1px solid var(--border);
+    font-size: 16px; line-height: 1.55; color: var(--muted);
+  }
+  .turn.current { color: var(--text); font-size: 20px; border-bottom: none; }
+  /* 영어 패널: 현재 자막만 항상 크고 굵게 */
+  #enPanel { padding: 40px 60px; justify-content: center; }
+  #enPanel .history { display: none; } /* 히스토리 미사용 */
+  #enPanel #enCurrent {
+    font-size: 56px; font-weight: 700; line-height: 1.4;
+    color: var(--text); opacity: 1; letter-spacing: -0.01em;
+    border-bottom: none; padding: 0;
+    text-align: center;
+    unicode-bidi: isolate; /* 명시적 dir 속성을 존중 */
+    word-break: break-word; overflow-wrap: anywhere;
+  }
+  /* 아랍어 등 RTL일 때 폰트 크기 약간 키워서 가독성 확보 */
+  #enPanel.rtl #enCurrent {
+    font-family: "SF Arabic", "Geeza Pro", "Noto Naskh Arabic", "Tahoma", sans-serif;
+    line-height: 1.55;
+  }
+  #enPanel #enCurrent::after { content: none; }
+  #enPanel #enCurrent.streaming::after {
+    content: "▍"; color: var(--accent); animation: blink 1s infinite; margin-left: 4px;
+  }
+  .turn.current::after {
+    content: "▍"; color: var(--accent); animation: blink 1s infinite;
+    margin-left: 2px;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  footer {
+    padding: 10px 20px; border-top: 1px solid var(--border);
+    font-size: 12px; color: var(--muted); display: flex; gap: 12px; align-items: center;
+  }
+  footer .spacer { flex: 1; }
+  .err-msg { color: var(--err); font-size: 13px; padding: 8px 20px; background: rgba(248,113,113,0.08); }
+  .err-msg:empty { display: none; }
+  #meter {
+    width: 120px; height: 8px; background: #2a2f3a; border-radius: 4px;
+    overflow: hidden; margin-left: 12px;
+  }
+  #meterFill { height: 100%; width: 0%; background: var(--ok); transition: width 50ms linear; }
+  .mode-row {
+    display: flex; gap: 14px; align-items: center; padding: 8px 20px;
+    border-bottom: 1px solid var(--border); font-size: 13px; color: var(--muted);
+    min-height: 38px;
+  }
+  .mode-row:empty { display: none; }
+  .mode-row label { display: flex; align-items: center; gap: 6px; }
+  .mode-row input[type=range] { width: 140px; }
+  .mode-row .val { color: var(--text); min-width: 48px; font-variant-numeric: tabular-nums; }
+  .ptt-bar {
+    display: flex; gap: 12px; align-items: center; padding: 10px 20px;
+    border-bottom: 1px solid var(--border); background: rgba(91,157,255,0.06);
+  }
+  .ptt-bar button {
+    background: var(--accent); padding: 10px 18px; font-size: 15px; user-select: none;
+  }
+  .ptt-bar button.active { background: var(--ok); box-shadow: 0 0 12px var(--ok); }
+  .ptt-bar .hint { font-size: 12px; color: var(--muted); }
+  .debug-log {
+    display: none;
+    max-height: 160px; overflow-y: auto;
+    border-top: 1px solid var(--border);
+    background: #0a0c10; color: #9ab; font: 11px/1.4 ui-monospace, Menlo, monospace;
+    padding: 6px 12px;
+  }
+  .debug-log.on { display: block; }
+  .debug-log .l { white-space: pre-wrap; }
+  .debug-log .l.err { color: var(--err); }
+
+  /* === 발표 모드 === */
+  body.presenter { background: #000; }
+  body.presenter header,
+  body.presenter footer,
+  body.presenter #modeControls,
+  body.presenter #pttBar,
+  body.presenter #debugLog,
+  body.presenter #koPanel,
+  body.presenter #errMsg { display: none !important; }
+  body.presenter main { background: transparent; }
+  body.presenter main.show-ko { grid-template-columns: 1fr; }
+  body.presenter #enPanel {
+    background: #000;
+    padding: 24px 48px;
+    justify-content: center;
+  }
+  body.presenter #enPanel h2 { display: none; }
+  body.presenter #enPanel #enCurrent { font-size: 64px; }
+  body.presenter.rtl #enPanel #enCurrent { line-height: 1.5; }
+  /* 종료 버튼: 평소 안 보이다가 마우스 갖다대면 살짝 */
+  #exitPresenter {
+    position: fixed; top: 8px; right: 8px;
+    background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.4);
+    border: none; padding: 4px 10px; border-radius: 4px;
+    font-size: 11px; cursor: pointer; opacity: 0;
+    transition: opacity 0.2s; z-index: 100;
+  }
+  body.presenter #exitPresenter { display: block; }
+  body:not(.presenter) #exitPresenter { display: none; }
+  body.presenter:hover #exitPresenter { opacity: 1; }
+</style>
+</head>
+<body>
+  <header>
+    <span id="dot" class="dot"></span>
+    <h1>한국어 → <span id="targetLabel">English</span> 실시간 통역</h1>
+    <label style="font-size:13px;color:var(--muted)">번역 언어
+      <select id="targetLang">
+        <option value="en">English</option>
+        <option value="ar">العربية (아랍어)</option>
+        <option value="ja">日本語 (일본어)</option>
+        <option value="zh">中文 (중국어)</option>
+      </select>
+    </label>
+    <label style="font-size:13px;color:var(--muted)">음성
+      <select id="voiceSel">
+        <option value="marin">marin (여, GA 신규)</option>
+        <option value="cedar">cedar (남, GA 신규)</option>
+        <option value="alloy">alloy</option>
+        <option value="ash">ash</option>
+        <option value="ballad">ballad</option>
+        <option value="coral">coral</option>
+        <option value="echo">echo</option>
+        <option value="sage">sage</option>
+        <option value="shimmer">shimmer</option>
+        <option value="verse">verse</option>
+      </select>
+    </label>
+    <label style="font-size:13px;color:var(--muted)">발화 감지
+      <select id="vadMode">
+        <option value="server">Server VAD (기본)</option>
+        <option value="semantic">Semantic VAD (소음 강함)</option>
+        <option value="ptt">Push-to-Talk (스페이스바)</option>
+      </select>
+    </label>
+    <button id="toggleKo" class="secondary" type="button">한국어 원문 보기</button>
+    <button id="copyEn" class="secondary" type="button" title="현재 자막 텍스트를 클립보드에 복사">자막 복사</button>
+    <button id="presenterBtn" class="secondary" type="button" title="발표 모드 (Esc로 종료)">발표 모드</button>
+    <button id="startBtn">시작</button>
+    <button id="stopBtn" class="secondary" disabled>중지</button>
+  </header>
+  <div id="modeControls" class="mode-row"></div>
+  <div id="pttBar" class="ptt-bar" style="display:none">
+    <button id="pttBtn">🎤 누르고 말하기 (Space)</button>
+    <span class="hint">버튼/스페이스바를 누르고 있는 동안만 녹음됩니다.</span>
+  </div>
+
+  <div id="errMsg" class="err-msg"></div>
+
+  <main id="mainGrid">
+    <section class="panel" id="koPanel">
+      <h2>한국어 (입력)</h2>
+      <div class="history" id="koHistory"></div>
+      <div class="turn current" id="koCurrent" style="display:none"></div>
+    </section>
+    <section class="panel" id="enPanel">
+      <h2 id="enHeader">English (translation)</h2>
+      <div class="history" id="enHistory"></div>
+      <div class="turn current" id="enCurrent" dir="auto" style="display:none"></div>
+    </section>
+  </main>
+
+  <audio id="ttsAudio" autoplay></audio>
+  <button id="exitPresenter" type="button">✕ 발표모드 종료 (Esc)</button>
+
+  <div id="debugLog" class="debug-log"></div>
+  <footer>
+    <span id="status">대기 중</span>
+    <div id="meter" title="마이크 입력 레벨"><div id="meterFill"></div></div>
+    <span class="spacer"></span>
+    <button class="secondary" id="toggleDebug">디버그 ON</button>
+    <button class="secondary" id="resetKey">API 키 재설정</button>
+  </footer>
+
+<script>
+const MODEL = "gpt-realtime";
+const REALTIME_URL = "https://api.openai.com/v1/realtime/calls";
+
+const LANGS = {
+  en: { name: "English",  header: "English (translation)" },
+  ar: { name: "Arabic",   header: "العربية (translation)" },
+  ja: { name: "Japanese", header: "日本語 (translation)" },
+  zh: { name: "Mandarin Chinese", header: "中文 (translation)" },
+};
+const LABEL = { en: "English", ar: "العربية", ja: "日本語", zh: "中文" };
+
+function buildInstructions(targetCode) {
+  const lang = LANGS[targetCode]?.name || "English";
+  return `You are a simultaneous interpreter. The user speaks Korean.
+Translate every utterance into fluent, natural ${lang}.
+Do not answer questions, do not add commentary, do not refuse — only translate.
+Keep the speaker's tone, register, and intent. Always reply in ${lang} only.`;
+}
+
+const $ = (id) => document.getElementById(id);
+const startBtn = $("startBtn"), stopBtn = $("stopBtn");
+const dot = $("dot"), statusEl = $("status"), errEl = $("errMsg");
+const koHistory = $("koHistory"), koCurrent = $("koCurrent");
+const enHistory = $("enHistory"), enCurrent = $("enCurrent");
+const ttsAudio = $("ttsAudio");
+
+let pc = null, dc = null, micStream = null;
+let audioCtx = null, meterRaf = null;
+let enBuffer = "";
+let enResponseActive = false;
+const meterFill = document.getElementById("meterFill");
+const debugLog = document.getElementById("debugLog");
+const toggleDebugBtn = document.getElementById("toggleDebug");
+toggleDebugBtn.onclick = () => {
+  const on = debugLog.classList.toggle("on");
+  toggleDebugBtn.textContent = on ? "디버그 OFF" : "디버그 ON";
+};
+function dbg(msg, kind) {
+  const line = document.createElement("div");
+  line.className = "l" + (kind === "err" ? " err" : "");
+  const ts = new Date().toLocaleTimeString();
+  line.textContent = `[${ts}] ${msg}`;
+  debugLog.appendChild(line);
+  while (debugLog.childElementCount > 200) debugLog.removeChild(debugLog.firstChild);
+  debugLog.scrollTop = debugLog.scrollHeight;
+}
+// 기본 ON으로 시작 (지금은 디버깅 중)
+debugLog.classList.add("on");
+toggleDebugBtn.textContent = "디버그 OFF";
+const targetLangSel = document.getElementById("targetLang");
+const voiceSel = document.getElementById("voiceSel");
+const vadModeSel = document.getElementById("vadMode");
+const modeControls = document.getElementById("modeControls");
+const pttBar = document.getElementById("pttBar");
+const pttBtn = document.getElementById("pttBtn");
+
+const vadState = {
+  serverThreshold: 0.5,
+  serverSilenceMs: 700,
+  semanticEagerness: "auto",
+};
+
+function buildTurnDetection() {
+  const m = vadModeSel.value;
+  if (m === "server") {
+    return {
+      type: "server_vad",
+      threshold: vadState.serverThreshold,
+      silence_duration_ms: vadState.serverSilenceMs,
+      prefix_padding_ms: 300,
+      create_response: true,
+    };
+  }
+  if (m === "semantic") {
+    return {
+      type: "semantic_vad",
+      eagerness: vadState.semanticEagerness,
+      create_response: true,
+    };
+  }
+  return null; // PTT: 서버 자동 턴 종료 끔
+}
+
+function renderModeControls() {
+  const m = vadModeSel.value;
+  pttBar.style.display = (m === "ptt") ? "flex" : "none";
+  if (m === "server") {
+    modeControls.innerHTML = `
+      <label>임계값 <input type="range" id="thr" min="0.2" max="0.95" step="0.05" value="${vadState.serverThreshold}"><span class="val" id="thrV">${vadState.serverThreshold}</span></label>
+      <label>묵음 종료 <input type="range" id="sil" min="300" max="2000" step="100" value="${vadState.serverSilenceMs}"><span class="val" id="silV">${vadState.serverSilenceMs}ms</span></label>
+      <span class="hint">시끄러운 곳: 임계값 ↑, 빨리 끊지 않게 묵음 ↑</span>
+    `;
+    const thr = document.getElementById("thr"), sil = document.getElementById("sil");
+    thr.oninput = () => {
+      vadState.serverThreshold = parseFloat(thr.value);
+      document.getElementById("thrV").textContent = thr.value;
+      pushTurnDetection();
+    };
+    sil.oninput = () => {
+      vadState.serverSilenceMs = parseInt(sil.value);
+      document.getElementById("silV").textContent = sil.value + "ms";
+      pushTurnDetection();
+    };
+  } else if (m === "semantic") {
+    modeControls.innerHTML = `
+      <label>Eagerness
+        <select id="eag">
+          <option value="low">low (가장 끈기있게 기다림)</option>
+          <option value="auto">auto (균형, 기본)</option>
+          <option value="high">high (빨리 끊음)</option>
+          <option value="max">max (가장 빨리)</option>
+        </select>
+      </label>
+      <span class="hint">말 중간에 자주 끊기면 low, 너무 늦으면 high</span>
+    `;
+    const eag = document.getElementById("eag");
+    eag.value = vadState.semanticEagerness;
+    eag.onchange = () => { vadState.semanticEagerness = eag.value; pushTurnDetection(); };
+  } else {
+    modeControls.innerHTML = `<span class="hint">VAD 비활성. 버튼/스페이스바 누른 동안만 서버로 오디오가 전송됩니다.</span>`;
+  }
+}
+
+function pushTurnDetection() {
+  if (!dc || dc.readyState !== "open") return;
+  dc.send(JSON.stringify({
+    type: "session.update",
+    session: { type: "realtime", audio: { input: { turn_detection: buildTurnDetection() } } },
+  }));
+}
+
+vadModeSel.addEventListener("change", () => {
+  renderModeControls();
+  if (dc && dc.readyState === "open") {
+    pushTurnDetection();
+    if (vadModeSel.value === "ptt") setMicEnabled(false);
+    else setMicEnabled(true);
+  }
+});
+renderModeControls();
+
+function setMicEnabled(on) {
+  if (!micStream) return;
+  micStream.getAudioTracks().forEach((t) => (t.enabled = on));
+}
+
+let pttHolding = false;
+function pttDown() {
+  if (vadModeSel.value !== "ptt") return;
+  if (!dc || dc.readyState !== "open") return;
+  if (pttHolding) return;
+  pttHolding = true;
+  pttBtn.classList.add("active");
+  pttBtn.textContent = "● 녹음 중… (떼면 전송)";
+  setMicEnabled(true);
+}
+function pttUp() {
+  if (!pttHolding) return;
+  pttHolding = false;
+  pttBtn.classList.remove("active");
+  pttBtn.textContent = "🎤 누르고 말하기 (Space)";
+  setMicEnabled(false);
+  try {
+    dc.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
+    dc.send(JSON.stringify({ type: "response.create" }));
+  } catch (e) { console.error(e); }
+}
+pttBtn.addEventListener("mousedown", pttDown);
+pttBtn.addEventListener("touchstart", (e) => { e.preventDefault(); pttDown(); });
+window.addEventListener("mouseup", pttUp);
+window.addEventListener("touchend", pttUp);
+window.addEventListener("keydown", (e) => {
+  if (e.code === "Space" && !e.repeat && document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "SELECT") {
+    e.preventDefault();
+    pttDown();
+  }
+});
+window.addEventListener("keyup", (e) => {
+  if (e.code === "Space") { e.preventDefault(); pttUp(); }
+});
+voiceSel.addEventListener("change", () => {
+  // 음성은 세션 시작 후에는 변경 불가 — 다음 시작 시 적용 안내
+  if (dc && dc.readyState === "open") {
+    showError("음성 변경은 다음 세션부터 적용됩니다. '중지' 후 다시 '시작' 해주세요.");
+  }
+});
+const targetLabel = document.getElementById("targetLabel");
+const enHeader = document.getElementById("enHeader");
+
+const RTL_LANGS = new Set(["ar", "he", "fa", "ur"]);
+function applyTargetLabel() {
+  const code = targetLangSel.value;
+  targetLabel.textContent = LABEL[code];
+  enHeader.textContent = LANGS[code].header;
+  const enPanelEl = document.getElementById("enPanel");
+  const isRtl = RTL_LANGS.has(code);
+  enPanelEl.classList.toggle("rtl", isRtl);
+  // 현재 자막 노드의 방향을 명시적으로 지정 (auto 보다 확실)
+  enCurrent.setAttribute("dir", isRtl ? "rtl" : "ltr");
+}
+targetLangSel.addEventListener("change", () => {
+  applyTargetLabel();
+  if (dc && dc.readyState === "open") {
+    dc.send(JSON.stringify({
+      type: "session.update",
+      session: { type: "realtime", instructions: buildInstructions(targetLangSel.value) },
+    }));
+  }
+});
+applyTargetLabel();
+
+const toggleKoBtn = document.getElementById("toggleKo");
+const mainGrid = document.getElementById("mainGrid");
+toggleKoBtn.addEventListener("click", () => {
+  const showing = mainGrid.classList.toggle("show-ko");
+  toggleKoBtn.textContent = showing ? "한국어 원문 숨기기" : "한국어 원문 보기";
+});
+
+const presenterBtn = document.getElementById("presenterBtn");
+const exitPresenterBtn = document.getElementById("exitPresenter");
+function enterPresenter() {
+  document.body.classList.add("presenter");
+  // 시도: 풀스크린 (사용자 제스처 필요해서 버튼 클릭 직후만 동작)
+  if (document.documentElement.requestFullscreen) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  }
+}
+function exitPresenter() {
+  document.body.classList.remove("presenter");
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+}
+presenterBtn.addEventListener("click", enterPresenter);
+exitPresenterBtn.addEventListener("click", exitPresenter);
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && document.body.classList.contains("presenter")) {
+    exitPresenter();
+  }
+});
+
+const copyEnBtn = document.getElementById("copyEn");
+copyEnBtn.addEventListener("click", async () => {
+  const text = enCurrent.textContent;
+  if (!text) { copyEnBtn.textContent = "(자막 없음)"; setTimeout(()=>copyEnBtn.textContent="자막 복사",1200); return; }
+  try {
+    await navigator.clipboard.writeText(text);
+    copyEnBtn.textContent = "✓ 복사됨";
+    setTimeout(() => copyEnBtn.textContent = "자막 복사", 1200);
+  } catch (e) {
+    showError("복사 실패: " + e.message);
+  }
+});
+
+function setStatus(text, kind) {
+  statusEl.textContent = text;
+  dot.className = "dot" + (kind === "live" ? " live" : kind === "err" ? " err" : "");
+}
+function showError(msg) {
+  errEl.textContent = msg;
+  if (msg) setStatus("오류", "err");
+}
+function getKey() {
+  let k = localStorage.getItem("openai_api_key");
+  if (!k) {
+    k = prompt("OpenAI API 키를 입력하세요 (sk-...). localStorage 에 저장됩니다.");
+    if (k) localStorage.setItem("openai_api_key", k.trim());
+  }
+  return k;
+}
+$("resetKey").onclick = () => {
+  localStorage.removeItem("openai_api_key");
+  alert("키가 삭제되었습니다. 다음 시작 시 다시 입력하세요.");
+};
+
+function startMeter(stream) {
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const src = audioCtx.createMediaStreamSource(stream);
+  const analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 512;
+  src.connect(analyser);
+  const buf = new Uint8Array(analyser.fftSize);
+  const tick = () => {
+    analyser.getByteTimeDomainData(buf);
+    let max = 0;
+    for (let i = 0; i < buf.length; i++) {
+      const v = Math.abs(buf[i] - 128) / 128;
+      if (v > max) max = v;
+    }
+    meterFill.style.width = Math.min(100, max * 200) + "%";
+    meterRaf = requestAnimationFrame(tick);
+  };
+  tick();
+}
+function stopMeter() {
+  if (meterRaf) cancelAnimationFrame(meterRaf);
+  meterRaf = null;
+  meterFill.style.width = "0%";
+  if (audioCtx) { audioCtx.close(); audioCtx = null; }
+}
+
+function commitKo() {
+  const text = koCurrent.textContent.trim();
+  if (!text) return;
+  const div = document.createElement("div");
+  div.className = "turn";
+  div.textContent = text;
+  koHistory.appendChild(div);
+  koCurrent.textContent = "";
+  koCurrent.style.display = "none";
+  koHistory.scrollTop = koHistory.scrollHeight;
+}
+function finalizeEn(text) {
+  // 히스토리에 쌓지 않음 — 현재 자막만 유지(다음 발화 시작 시 교체)
+  if (text != null && text.trim()) {
+    enBuffer = text;
+    enCurrent.textContent = text;
+  }
+  enCurrent.classList.remove("streaming");
+  // 다음 delta 가 오면 새 발화로 인식해서 자동 리셋
+  enResponseActive = false;
+}
+
+function handleEvent(evt) {
+  console.debug("[oai]", evt.type, evt);
+  const t = evt.type || "";
+  dbg(t + (evt.delta ? "  Δ=" + JSON.stringify(evt.delta).slice(0, 60) : ""));
+
+  // 입력(한국어) 전사
+  if (t === "input_audio_buffer.speech_started") {
+    koCurrent.textContent = "…";
+    koCurrent.style.display = "block";
+    return;
+  }
+  if (t.endsWith("input_audio_transcription.delta") && evt.delta) {
+    if (koCurrent.textContent === "…") koCurrent.textContent = "";
+    koCurrent.textContent += evt.delta;
+    koCurrent.style.display = "block";
+    return;
+  }
+  if (t.endsWith("input_audio_transcription.completed")) {
+    if (evt.transcript) koCurrent.textContent = evt.transcript;
+    commitKo();
+    return;
+  }
+
+  // 출력(번역 텍스트) — GA / 베타 양쪽 이벤트 이름 모두 처리
+  if (/^response\.(output_)?(audio_transcript|text)\.delta$/.test(t) && evt.delta) {
+    if (!enResponseActive) {
+      // 새 발화 시작 → 이전 자막 지움
+      enBuffer = "";
+      enResponseActive = true;
+      enCurrent.classList.add("streaming");
+    }
+    enBuffer += evt.delta;
+    enCurrent.textContent = enBuffer;
+    enCurrent.style.display = "block";
+    return;
+  }
+  if (/^response\.(output_)?(audio_transcript|text)\.done$/.test(t)) {
+    finalizeEn(evt.transcript || evt.text);
+    return;
+  }
+  // response.output_item.done — 중복 commit 방지를 위해 무시
+  if (t === "response.output_item.done") return;
+
+  if (t === "error") {
+    console.error("realtime error", evt);
+    showError(evt.error?.message || "Realtime API error");
+    return;
+  }
+}
+
+async function connectWithModel(modelName, key, offerSdp) {
+  const res = await fetch(`${REALTIME_URL}?model=${modelName}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/sdp",
+    },
+    body: offerSdp,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    const err = new Error(`${res.status} ${res.statusText}: ${text}`);
+    err.status = res.status;
+    err.body = text;
+    throw err;
+  }
+  return await res.text();
+}
+
+async function start() {
+  showError("");
+  const key = getKey();
+  if (!key) { showError("API 키가 필요합니다."); return; }
+
+  startBtn.disabled = true;
+  setStatus("마이크 권한 요청 중…");
+
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    });
+  } catch (e) {
+    showError("마이크 권한이 거부되었습니다: " + e.message);
+    startBtn.disabled = false;
+    return;
+  }
+  startMeter(micStream);
+
+  setStatus("연결 중…");
+  pc = new RTCPeerConnection();
+
+  pc.ontrack = (e) => { ttsAudio.srcObject = e.streams[0]; };
+  micStream.getTracks().forEach((t) => pc.addTrack(t, micStream));
+
+  dc = pc.createDataChannel("oai-events");
+  dc.onopen = () => {
+    dbg("dc.open → session.update 송신");
+    const payload = {
+      type: "session.update",
+      session: {
+        type: "realtime",
+        instructions: buildInstructions(targetLangSel.value),
+        audio: {
+          input: {
+            transcription: { model: "gpt-4o-mini-transcribe", language: "ko" },
+            turn_detection: buildTurnDetection(),
+          },
+          output: { voice: voiceSel.value },
+        },
+      },
+    };
+    dc.send(JSON.stringify(payload));
+    if (vadModeSel.value === "ptt") setMicEnabled(false);
+    const hint = vadModeSel.value === "ptt" ? "연결됨 · 스페이스바를 눌러 말하세요" : "연결됨 · 말씀하세요";
+    setStatus(hint, "live");
+    stopBtn.disabled = false;
+  };
+  dc.onclose = () => dbg("dc.close", "err");
+  dc.onerror = (e) => dbg("dc.error: " + (e?.message || e), "err");
+  dc.onmessage = (e) => {
+    try { handleEvent(JSON.parse(e.data)); }
+    catch (err) { console.error("parse err", err, e.data); dbg("parse err: " + e.data, "err"); }
+  };
+
+  pc.onconnectionstatechange = () => {
+    dbg("pc.state=" + pc?.connectionState);
+    if (pc?.connectionState === "failed" || pc?.connectionState === "disconnected") {
+      showError("연결이 끊어졌습니다.");
+      stop();
+    }
+  };
+  pc.oniceconnectionstatechange = () => dbg("ice=" + pc?.iceConnectionState);
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+
+  let answerSdp;
+  try {
+    answerSdp = await connectWithModel(MODEL, key, offer.sdp);
+  } catch (e1) {
+    console.error("연결 실패:", e1.status, e1.body);
+    if (e1.status === 401) {
+      localStorage.removeItem("openai_api_key");
+      showError("API 키가 거부되었습니다(401). 재설정 후 다시 시도하세요.");
+    } else {
+      showError(`연결 실패 (${e1.status}): ${e1.body?.slice(0, 400) || e1.message}`);
+    }
+    cleanup();
+    return;
+  }
+
+  await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
+}
+
+function cleanup() {
+  stopMeter();
+  if (dc) { try { dc.close(); } catch {} dc = null; }
+  if (pc) { try { pc.close(); } catch {} pc = null; }
+  if (micStream) {
+    micStream.getTracks().forEach((t) => t.stop());
+    micStream = null;
+  }
+  ttsAudio.srcObject = null;
+  startBtn.disabled = false;
+  stopBtn.disabled = true;
+}
+
+function stop() {
+  cleanup();
+  setStatus("중지됨");
+  koCurrent.style.display = "none";
+  enCurrent.style.display = "none";
+  commitEn();
+  commitKo();
+}
+
+startBtn.onclick = start;
+stopBtn.onclick = stop;
+</script>
+</body>
+</html>
