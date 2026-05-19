@@ -27,12 +27,12 @@
           font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Pretendard", "Noto Sans KR", sans-serif;
           background: rgba(0, 0, 0, 0.88);
           color: #fff;
-          padding: 12px 24px;
-          min-height: 32px;
-          display: flex; align-items: center; justify-content: center; gap: 14px;
-          font-size: 28px; font-weight: 700; line-height: 1.35;
+          padding: 18px 32px;
+          min-height: 48px;
+          display: flex; align-items: center; justify-content: center; gap: 16px;
+          font-size: 44px; font-weight: 900; line-height: 1.25;
           text-align: center;
-          letter-spacing: -0.005em;
+          letter-spacing: -0.015em;
           backdrop-filter: blur(8px);
           -webkit-backdrop-filter: blur(8px);
           border-bottom: 2px solid rgba(91, 157, 255, 0.4);
@@ -50,7 +50,7 @@
         @keyframes pulse { 50% { opacity: 0.5; } }
         #text:empty::before {
           content: "통역 대기 중 · 한국어로 말씀하세요";
-          color: rgba(255,255,255,0.5); font-weight: 500; font-size: 22px;
+          color: rgba(255,255,255,0.5); font-weight: 600; font-size: 28px;
         }
         .bar.streaming #text::after {
           content: "▍"; color: #5b9dff; margin-left: 6px;
