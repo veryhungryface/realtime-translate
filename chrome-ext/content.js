@@ -1,6 +1,14 @@
 // 활성 페이지 상단에 얇은 자막 바를 주입한다.
 (() => {
-  if (window.__rttOverlayInjected) return;
+  const VERSION = 5;
+  if (window.__rttOverlayVersion >= VERSION) return;
+  // 이전 버전이 살아있으면 DOM 만 제거 (이벤트 리스너는 페이지 새로고침 전까지 그대로)
+  const oldHost = document.getElementById("__rtt_overlay_host__");
+  if (oldHost) oldHost.remove();
+  if (window.__rttOverlayVersion) {
+    console.warn("[rtt] 이전 버전 content script 감지 — 페이지 새로고침(Cmd+R) 권장.");
+  }
+  window.__rttOverlayVersion = VERSION;
   window.__rttOverlayInjected = true;
 
   const HOST_ID = "__rtt_overlay_host__";
