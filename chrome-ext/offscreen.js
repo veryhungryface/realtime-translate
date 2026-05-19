@@ -16,6 +16,9 @@ let currentCfg = null;
 let enBuffer = "";
 let responseActive = false;
 let serverResponseActive = false; // 서버 측 response 진행 여부 (response.created ~ response.done)
+let userInitiatedStop = false;    // 사용자가 중지 눌렀을 때 true → 자동 재연결 안 함
+let reconnectAttempts = 0;
+const MAX_RECONNECT = 8;
 const BENIGN_ERROR_CODES = new Set([
   "conversation_already_has_active_response",
   "input_audio_buffer_commit_empty",
@@ -135,6 +138,39 @@ async function start(cfg) {
   currentCfg = cfg;
   enBuffer = "";
   responseActive = false;
+  userInitiatedStop = false;
+  reconnectAttempts = 0;
+  await connect();
+}
+
+async function reconnect() {
+  if (userInitiatedStop) return;
+  if (reconnectAttempts >= MAX_RECONNECT) {
+    sendStatus({ error: `자동 재연결 ${MAX_RECONNECT}회 실패 — 수동으로 다시 시작해주세요`, running: false });
+    return;
+  }
+  reconnectAttempts++;
+  const delay = Math.min(8000, 500 * Math.pow(2, reconnectAttempts - 1));
+  console.log(`[rtt] 재연결 시도 ${reconnectAttempts}/${MAX_RECONNECT} (${delay}ms 후)`);
+  sendCaption(`🔄 재연결 중… (${reconnectAttempts}/${MAX_RECONNECT})`, false);
+  cleanupPeer();
+  await new Promise((r) => setTimeout(r, delay));
+  if (userInitiatedStop) return;
+  try {
+    await connect();
+    console.log("[rtt] 재연결 성공");
+    reconnectAttempts = 0;
+  } catch (e) {
+    console.error("[rtt] 재연결 실패:", e);
+    reconnect(); // 다음 시도
+  }
+}
+
+async function connect() {
+  const cfg = currentCfg;
+  serverResponseActive = false;
+  enBuffer = "";
+  responseActive = false;
 
   // AGC(Auto Gain Control)는 멀리서 나는 소리를 자동으로 증폭해서
   // 가까운 내 목소리와 비슷한 음량으로 만들어버린다 — 잡음 환경에서는 끔.
@@ -174,13 +210,17 @@ async function start(cfg) {
     try { handleEvent(JSON.parse(e.data)); }
     catch (err) { console.error("[oai] parse err", err); }
   };
-  dc.onclose = () => sendStatus({ running: false });
-  dc.onerror = (e) => sendStatus({ error: "DataChannel error: " + (e?.message || e) });
+  dc.onclose = () => {
+    console.warn("[rtt] DataChannel closed");
+    if (!userInitiatedStop) reconnect();
+  };
+  dc.onerror = (e) => console.error("[rtt] DataChannel error", e);
 
   pc.onconnectionstatechange = () => {
-    if (pc?.connectionState === "failed" || pc?.connectionState === "disconnected") {
-      sendStatus({ error: "연결이 끊어졌습니다", running: false });
-      cleanup();
+    const s = pc?.connectionState;
+    console.log("[rtt] pc.connectionState =", s);
+    if (s === "failed" || s === "disconnected" || s === "closed") {
+      if (!userInitiatedStop) reconnect();
     }
   };
 
@@ -286,13 +326,18 @@ function pttUp() {
   }
 }
 
-function cleanup() {
-  if (dc) { try { dc.close(); } catch {} dc = null; }
-  if (pc) { try { pc.close(); } catch {} pc = null; }
+function cleanupPeer() {
+  if (dc) { try { dc.onopen = dc.onmessage = dc.onclose = dc.onerror = null; dc.close(); } catch {} dc = null; }
+  if (pc) { try { pc.onconnectionstatechange = pc.ontrack = null; pc.close(); } catch {} pc = null; }
   teardownGate();
   if (rawMicStream) { rawMicStream.getTracks().forEach((t) => t.stop()); rawMicStream = null; }
   micStream = null;
   ttsAudio.srcObject = null;
+}
+
+function cleanup() {
+  userInitiatedStop = true;
+  cleanupPeer();
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
