@@ -16,8 +16,8 @@ async function ensureOffscreen() {
   if (await hasOffscreen()) return;
   await chrome.offscreen.createDocument({
     url: OFFSCREEN_PATH,
-    reasons: ["USER_MEDIA"],
-    justification: "마이크 입력으로 OpenAI Realtime API 와 WebRTC 통신",
+    reasons: ["USER_MEDIA", "AUDIO_PLAYBACK"],
+    justification: "마이크 입력 + 번역 음성 재생 (OpenAI Realtime API WebRTC)",
   });
 }
 

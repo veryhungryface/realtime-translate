@@ -71,6 +71,11 @@ async function start(cfg) {
   pc.ontrack = (e) => {
     ttsAudio.srcObject = e.streams[0];
     ttsAudio.muted = !!cfg.muteTts;
+    ttsAudio.volume = 1.0;
+    ttsAudio.play().catch((err) => {
+      console.error("[oai] audio play failed", err);
+      sendStatus({ error: "오디오 재생 실패: " + err.message });
+    });
   };
   micStream.getTracks().forEach((t) => pc.addTrack(t, micStream));
 
