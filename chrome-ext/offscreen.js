@@ -10,6 +10,8 @@ const LANGS = {
 };
 
 let pc = null, dc = null, micStream = null;
+let rawMicStream = null;          // getUserMedia 원본
+let gateCtx = null, gateNode = null, gateAnalyser = null, gateTimer = null;
 let currentCfg = null;
 let enBuffer = "";
 let responseActive = false;
@@ -64,6 +66,49 @@ function setMicEnabled(on) {
   micStream.getAudioTracks().forEach((t) => (t.enabled = on));
 }
 
+// Web Audio 기반 클라이언트 측 볼륨 게이트
+// 원본 마이크 → AnalyserNode + GainNode → MediaStreamDestination → pc 트랙
+// 히스테리시스로 깜빡임 방지 (열림 임계값, 닫힘 임계값 분리)
+function buildGatedStream(srcStream, openLevel) {
+  const closeLevel = Math.max(0.005, openLevel * 0.5);
+  gateCtx = new (self.AudioContext || self.webkitAudioContext)();
+  const source = gateCtx.createMediaStreamSource(srcStream);
+  gateNode = gateCtx.createGain();
+  gateNode.gain.value = 0;
+  gateAnalyser = gateCtx.createAnalyser();
+  gateAnalyser.fftSize = 1024;
+  const dest = gateCtx.createMediaStreamDestination();
+  source.connect(gateAnalyser);
+  source.connect(gateNode);
+  gateNode.connect(dest);
+
+  const buf = new Uint8Array(gateAnalyser.fftSize);
+  let openHoldUntil = 0;
+  const HOLD_MS = 250; // 떨어진 뒤에도 250ms 더 유지 → 단어 사이 묵음에 끊기지 않음
+  gateTimer = setInterval(() => {
+    gateAnalyser.getByteTimeDomainData(buf);
+    let max = 0;
+    for (let i = 0; i < buf.length; i++) {
+      const v = Math.abs(buf[i] - 128) / 128;
+      if (v > max) max = v;
+    }
+    const now = performance.now();
+    if (max > openLevel) {
+      gateNode.gain.value = 1;
+      openHoldUntil = now + HOLD_MS;
+    } else if (max < closeLevel && now > openHoldUntil) {
+      gateNode.gain.value = 0;
+    }
+  }, 30);
+  return dest.stream;
+}
+
+function teardownGate() {
+  if (gateTimer) { clearInterval(gateTimer); gateTimer = null; }
+  if (gateCtx) { try { gateCtx.close(); } catch {} gateCtx = null; }
+  gateNode = null; gateAnalyser = null;
+}
+
 function buildSessionUpdate(cfg) {
   return {
     type: "session.update",
@@ -86,9 +131,16 @@ async function start(cfg) {
   enBuffer = "";
   responseActive = false;
 
-  micStream = await navigator.mediaDevices.getUserMedia({
+  rawMicStream = await navigator.mediaDevices.getUserMedia({
     audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
   });
+  // 로컬 게이트 적용 시 원본 → 게이트 → 전송 스트림
+  if (cfg.localGate) {
+    const openLevel = (cfg.gateThreshold || 8) / 100;
+    micStream = buildGatedStream(rawMicStream, openLevel);
+  } else {
+    micStream = rawMicStream;
+  }
 
   pc = new RTCPeerConnection();
   pc.ontrack = (e) => {
@@ -210,7 +262,9 @@ function pttUp() {
 function cleanup() {
   if (dc) { try { dc.close(); } catch {} dc = null; }
   if (pc) { try { pc.close(); } catch {} pc = null; }
-  if (micStream) { micStream.getTracks().forEach((t) => t.stop()); micStream = null; }
+  teardownGate();
+  if (rawMicStream) { rawMicStream.getTracks().forEach((t) => t.stop()); rawMicStream = null; }
+  micStream = null;
   ttsAudio.srcObject = null;
 }
 

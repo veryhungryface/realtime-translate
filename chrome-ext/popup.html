@@ -97,6 +97,15 @@
     <span style="color: var(--text); font-size: 13px;">번역 음성 끄기 (자막만)</span>
   </label>
 
+  <label style="flex-direction: row; align-items: center; gap: 8px;">
+    <input id="localGate" type="checkbox" style="width: auto;" />
+    <span style="color: var(--text); font-size: 13px;">원거리 잡음 차단 (내 목소리만)</span>
+  </label>
+  <label>　└ 게이트 임계값
+    <input id="gateThreshold" type="range" min="3" max="25" step="1" value="8" />
+    <span id="gateThresholdVal" style="color: var(--text); font-size: 11px;">0.08</span>
+  </label>
+
   <div class="row">
     <button id="startBtn">시작</button>
     <button id="stopBtn" class="secondary" disabled>중지</button>

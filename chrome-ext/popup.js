@@ -1,15 +1,20 @@
 const $ = (id) => document.getElementById(id);
 const apiKeyEl = $("apiKey"), langEl = $("lang"), voiceEl = $("voice"), vadEl = $("vad"), noiseEl = $("noise"), muteEl = $("muteTts");
+const gateEl = $("localGate"), gateThrEl = $("gateThreshold"), gateThrVal = $("gateThresholdVal");
+function fmtGate(v) { return (parseInt(v, 10) / 100).toFixed(2); }
+gateThrEl.addEventListener("input", () => { gateThrVal.textContent = fmtGate(gateThrEl.value); });
 const startBtn = $("startBtn"), stopBtn = $("stopBtn"), statusEl = $("status");
 
 // 설정 로드
-chrome.storage.local.get(["apiKey", "lang", "voice", "vad", "noise", "muteTts", "running"], (cfg) => {
+chrome.storage.local.get(["apiKey", "lang", "voice", "vad", "noise", "muteTts", "localGate", "gateThreshold", "running"], (cfg) => {
   if (cfg.apiKey) apiKeyEl.value = cfg.apiKey;
   if (cfg.lang) langEl.value = cfg.lang;
   if (cfg.voice) voiceEl.value = cfg.voice;
   if (cfg.vad) vadEl.value = cfg.vad;
   if (cfg.noise) noiseEl.value = cfg.noise;
   if (cfg.muteTts) muteEl.checked = !!cfg.muteTts;
+  if (cfg.localGate) gateEl.checked = !!cfg.localGate;
+  if (cfg.gateThreshold) { gateThrEl.value = cfg.gateThreshold; gateThrVal.textContent = fmtGate(cfg.gateThreshold); }
   setRunning(!!cfg.running);
 });
 
@@ -33,11 +38,13 @@ function saveAndPush() {
     vad: vadEl.value,
     noise: noiseEl.value,
     muteTts: muteEl.checked,
+    localGate: gateEl.checked,
+    gateThreshold: parseInt(gateThrEl.value, 10),
   };
   chrome.storage.local.set(cfg);
   chrome.runtime.sendMessage({ type: "config-changed", cfg }).catch(() => {});
 }
-[langEl, voiceEl, vadEl, noiseEl, muteEl].forEach((el) => el.addEventListener("change", saveAndPush));
+[langEl, voiceEl, vadEl, noiseEl, muteEl, gateEl, gateThrEl].forEach((el) => el.addEventListener("change", saveAndPush));
 apiKeyEl.addEventListener("change", saveAndPush);
 
 startBtn.addEventListener("click", async () => {
@@ -55,6 +62,8 @@ startBtn.addEventListener("click", async () => {
       vad: vadEl.value,
       noise: noiseEl.value,
       muteTts: muteEl.checked,
+      localGate: gateEl.checked,
+      gateThreshold: parseInt(gateThrEl.value, 10),
     },
   });
   if (!res?.ok) {
