@@ -83,6 +83,15 @@
     </select>
   </label>
 
+  <label>소음 정도
+    <select id="noise">
+      <option value="quiet">조용함 (조용한 사무실/스튜디오)</option>
+      <option value="normal" selected>보통 (일반 환경)</option>
+      <option value="noisy">시끄러움 (카페/회의실)</option>
+      <option value="veryNoisy">매우 시끄러움 (이벤트/공항)</option>
+    </select>
+  </label>
+
   <label style="flex-direction: row; align-items: center; gap: 8px;">
     <input id="muteTts" type="checkbox" style="width: auto;" />
     <span style="color: var(--text); font-size: 13px;">번역 음성 끄기 (자막만)</span>

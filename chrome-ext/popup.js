@@ -1,13 +1,14 @@
 const $ = (id) => document.getElementById(id);
-const apiKeyEl = $("apiKey"), langEl = $("lang"), voiceEl = $("voice"), vadEl = $("vad"), muteEl = $("muteTts");
+const apiKeyEl = $("apiKey"), langEl = $("lang"), voiceEl = $("voice"), vadEl = $("vad"), noiseEl = $("noise"), muteEl = $("muteTts");
 const startBtn = $("startBtn"), stopBtn = $("stopBtn"), statusEl = $("status");
 
 // 설정 로드
-chrome.storage.local.get(["apiKey", "lang", "voice", "vad", "muteTts", "running"], (cfg) => {
+chrome.storage.local.get(["apiKey", "lang", "voice", "vad", "noise", "muteTts", "running"], (cfg) => {
   if (cfg.apiKey) apiKeyEl.value = cfg.apiKey;
   if (cfg.lang) langEl.value = cfg.lang;
   if (cfg.voice) voiceEl.value = cfg.voice;
   if (cfg.vad) vadEl.value = cfg.vad;
+  if (cfg.noise) noiseEl.value = cfg.noise;
   if (cfg.muteTts) muteEl.checked = !!cfg.muteTts;
   setRunning(!!cfg.running);
 });
@@ -30,12 +31,13 @@ function saveAndPush() {
     lang: langEl.value,
     voice: voiceEl.value,
     vad: vadEl.value,
+    noise: noiseEl.value,
     muteTts: muteEl.checked,
   };
   chrome.storage.local.set(cfg);
   chrome.runtime.sendMessage({ type: "config-changed", cfg }).catch(() => {});
 }
-[langEl, voiceEl, vadEl, muteEl].forEach((el) => el.addEventListener("change", saveAndPush));
+[langEl, voiceEl, vadEl, noiseEl, muteEl].forEach((el) => el.addEventListener("change", saveAndPush));
 apiKeyEl.addEventListener("change", saveAndPush);
 
 startBtn.addEventListener("click", async () => {
@@ -51,6 +53,7 @@ startBtn.addEventListener("click", async () => {
       lang: langEl.value,
       voice: voiceEl.value,
       vad: vadEl.value,
+      noise: noiseEl.value,
       muteTts: muteEl.checked,
     },
   });

@@ -18,22 +18,45 @@ const ttsAudio = document.getElementById("tts");
 
 function buildInstructions(code) {
   const lang = LANGS[code] || "English";
-  return `You are a simultaneous interpreter. The user speaks Korean.
-Translate every utterance into fluent, natural ${lang}.
-Do not answer questions, do not add commentary, do not refuse — only translate.
-Keep the speaker's tone, register, and intent. Always reply in ${lang} only.`;
+  return `You are a strict simultaneous interpreter. The user speaks Korean.
+
+ABSOLUTE RULES — never break these:
+1. NEVER greet, NEVER introduce yourself, NEVER ask what the user wants.
+2. NEVER answer questions, give opinions, or add commentary of any kind.
+3. NEVER explain, summarize, apologize, or describe what you are doing.
+4. NEVER output anything in Korean — output ONLY in ${lang}.
+5. If the incoming audio is silence, noise, music, coughing, breathing,
+   non-speech sounds, or audio you cannot clearly understand as Korean
+   speech, output absolutely nothing — produce an empty response.
+6. If the user says something like "hello" or "test", just translate
+   those exact words — do not respond as if greeted.
+
+Your ONLY job: take Korean speech and output the equivalent ${lang}
+translation, keeping tone and register. Nothing else, ever.`;
 }
 
-function buildTurnDetection(mode) {
-  // PTT: 서버 자동 턴 종료 끔 (클라이언트가 수동 commit)
+// 소음 정도 → VAD 파라미터 매핑
+const NOISE_PRESETS = {
+  quiet:    { threshold: 0.40, silence: 500,  eagerness: "auto" },
+  normal:   { threshold: 0.55, silence: 700,  eagerness: "auto" },
+  noisy:    { threshold: 0.70, silence: 900,  eagerness: "low"  },
+  veryNoisy:{ threshold: 0.85, silence: 1200, eagerness: "low"  },
+};
+
+function buildTurnDetection(mode, noise) {
   if (mode === "ptt") return null;
-  // interrupt_response: false → 모델이 번역 발화 중일 때 들어온 새 오디오로
-  // 진행 중 응답을 끊지 않음. 잡음에 의한 중단 방지.
+  const preset = NOISE_PRESETS[noise] || NOISE_PRESETS.normal;
   const common = { create_response: true, interrupt_response: false };
   if (mode === "server") {
-    return { type: "server_vad", threshold: 0.55, silence_duration_ms: 700, prefix_padding_ms: 300, ...common };
+    return {
+      type: "server_vad",
+      threshold: preset.threshold,
+      silence_duration_ms: preset.silence,
+      prefix_padding_ms: 300,
+      ...common,
+    };
   }
-  return { type: "semantic_vad", eagerness: "auto", ...common };
+  return { type: "semantic_vad", eagerness: preset.eagerness, ...common };
 }
 
 function setMicEnabled(on) {
@@ -50,7 +73,7 @@ function buildSessionUpdate(cfg) {
       audio: {
         input: {
           transcription: { model: "gpt-4o-mini-transcribe", language: "ko" },
-          turn_detection: buildTurnDetection(cfg.vad),
+          turn_detection: buildTurnDetection(cfg.vad, cfg.noise),
         },
         output: { voice: cfg.voice },
       },
