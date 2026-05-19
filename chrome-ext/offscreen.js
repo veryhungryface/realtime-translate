@@ -25,6 +25,8 @@ Keep the speaker's tone, register, and intent. Always reply in ${lang} only.`;
 }
 
 function buildTurnDetection(mode) {
+  // PTT: 서버 자동 턴 종료 끔 (클라이언트가 수동 commit)
+  if (mode === "ptt") return null;
   // interrupt_response: false → 모델이 번역 발화 중일 때 들어온 새 오디오로
   // 진행 중 응답을 끊지 않음. 잡음에 의한 중단 방지.
   const common = { create_response: true, interrupt_response: false };
@@ -32,6 +34,11 @@ function buildTurnDetection(mode) {
     return { type: "server_vad", threshold: 0.55, silence_duration_ms: 700, prefix_padding_ms: 300, ...common };
   }
   return { type: "semantic_vad", eagerness: "auto", ...common };
+}
+
+function setMicEnabled(on) {
+  if (!micStream) return;
+  micStream.getAudioTracks().forEach((t) => (t.enabled = on));
 }
 
 function buildSessionUpdate(cfg) {
@@ -83,6 +90,9 @@ async function start(cfg) {
     }
   };
 
+  // PTT 모드면 마이크 기본 비활성 (버튼/스페이스 누른 동안만 전송)
+  if (cfg.vad === "ptt") setMicEnabled(false);
+
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
 
@@ -133,6 +143,7 @@ function sendStatus(payload) {
 }
 
 function applyConfigLive(cfg) {
+  const prevVad = currentCfg?.vad;
   currentCfg = { ...currentCfg, ...cfg };
   if (dc && dc.readyState === "open") {
     dc.send(JSON.stringify({
@@ -145,6 +156,24 @@ function applyConfigLive(cfg) {
     }));
   }
   if (ttsAudio) ttsAudio.muted = !!currentCfg.muteTts;
+  // 모드 전환 시 마이크 enable 상태 조정
+  if (currentCfg.vad === "ptt" && prevVad !== "ptt") setMicEnabled(false);
+  else if (currentCfg.vad !== "ptt" && prevVad === "ptt") setMicEnabled(true);
+}
+
+function pttDown() {
+  if (currentCfg?.vad !== "ptt") return;
+  setMicEnabled(true);
+}
+function pttUp() {
+  if (currentCfg?.vad !== "ptt") return;
+  setMicEnabled(false);
+  if (dc && dc.readyState === "open") {
+    try {
+      dc.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
+      dc.send(JSON.stringify({ type: "response.create" }));
+    } catch (e) { console.error(e); }
+  }
 }
 
 function cleanup() {
@@ -169,6 +198,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.type === "offscreen-config") {
       applyConfigLive(msg.cfg);
       sendResponse({ ok: true });
+      return;
+    }
+    if (msg.type === "offscreen-ptt-down") { pttDown(); sendResponse({ ok: true }); return; }
+    if (msg.type === "offscreen-ptt-up") { pttUp(); sendResponse({ ok: true }); return; }
+    if (msg.type === "offscreen-mode") {
+      sendResponse({ vad: currentCfg?.vad || null });
       return;
     }
   })();

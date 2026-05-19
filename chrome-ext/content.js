@@ -69,9 +69,25 @@
           font-size: 14px; cursor: pointer; line-height: 1;
         }
         .close:hover { background: rgba(255,255,255,0.22); color: #fff; }
+        .ptt {
+          font-size: 13px; font-weight: 700; padding: 8px 14px; border-radius: 6px;
+          border: 2px solid rgba(255,255,255,0.25);
+          background: rgba(255,255,255,0.08); color: #fff;
+          cursor: pointer; user-select: none; flex-shrink: 0;
+          display: none;
+        }
+        .bar.ptt-mode .ptt { display: inline-block; }
+        .ptt.active {
+          background: #4ade80; color: #000; border-color: #4ade80;
+          box-shadow: 0 0 16px rgba(74, 222, 128, 0.6);
+        }
+        .bar.ptt-mode #text:empty::before {
+          content: "🎙️ 버튼/스페이스바를 누르고 한국어로 말하세요";
+        }
       </style>
       <div class="bar hidden" id="bar" dir="auto">
         <span class="live">● LIVE</span>
+        <button class="ptt" id="ptt" title="누르고 있는 동안 녹음 (Space)">🎙 PUSH</button>
         <span id="text"></span>
         <button class="close" id="close" title="이 탭에서 자막 숨김 (더블클릭으로 토글)">✕</button>
       </div>
@@ -80,7 +96,52 @@
     text = shadow.getElementById("text");
     bar.addEventListener("dblclick", () => bar.classList.toggle("hidden"));
     shadow.getElementById("close").addEventListener("click", () => bar.classList.add("hidden"));
+    setupPtt(shadow);
     (document.body || document.documentElement).appendChild(host);
+  }
+
+  let pttMode = false;
+  let pttHolding = false;
+  let pttBtn = null;
+
+  function pttDown() {
+    if (!pttMode || pttHolding) return;
+    pttHolding = true;
+    if (pttBtn) { pttBtn.classList.add("active"); pttBtn.textContent = "● REC"; }
+    chrome.runtime.sendMessage({ type: "ptt-down" }).catch(() => {});
+  }
+  function pttUp() {
+    if (!pttHolding) return;
+    pttHolding = false;
+    if (pttBtn) { pttBtn.classList.remove("active"); pttBtn.textContent = "🎙 PUSH"; }
+    chrome.runtime.sendMessage({ type: "ptt-up" }).catch(() => {});
+  }
+  function setupPtt(shadowRoot) {
+    pttBtn = shadowRoot.getElementById("ptt");
+    pttBtn.addEventListener("mousedown", (e) => { e.preventDefault(); pttDown(); });
+    pttBtn.addEventListener("touchstart", (e) => { e.preventDefault(); pttDown(); }, { passive: false });
+    window.addEventListener("mouseup", pttUp);
+    window.addEventListener("touchend", pttUp);
+    // Space 키 — 입력 필드에 포커스 없을 때만
+    window.addEventListener("keydown", (e) => {
+      if (e.code !== "Space" || e.repeat || !pttMode) return;
+      const a = document.activeElement;
+      if (a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA" || a.isContentEditable)) return;
+      e.preventDefault(); e.stopPropagation();
+      pttDown();
+    }, true);
+    window.addEventListener("keyup", (e) => {
+      if (e.code !== "Space" || !pttMode) return;
+      const a = document.activeElement;
+      if (a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA" || a.isContentEditable)) return;
+      e.preventDefault(); e.stopPropagation();
+      pttUp();
+    }, true);
+  }
+  function setPttMode(on) {
+    pttMode = !!on;
+    if (bar) bar.classList.toggle("ptt-mode", pttMode);
+    if (!pttMode && pttHolding) pttUp();
   }
 
   function show() { ensureBar(); bar.classList.remove("hidden"); }
@@ -99,12 +160,12 @@
 
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg.type === "caption") setCaption(msg.text, msg.streaming, msg.lang);
-    else if (msg.type === "overlay-show") show();
-    else if (msg.type === "overlay-hide") hide();
+    else if (msg.type === "overlay-show") { show(); setPttMode(msg.vad === "ptt"); }
+    else if (msg.type === "overlay-hide") { hide(); setPttMode(false); }
   });
 
   // 페이지 로드 시 background에 현재 running 여부 묻고 표시
   chrome.runtime.sendMessage({ type: "ping-running" }).then((res) => {
-    if (res?.running) show();
+    if (res?.running) { show(); setPttMode(res.vad === "ptt"); }
   }).catch(() => {});
 })();

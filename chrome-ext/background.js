@@ -2,6 +2,7 @@
 
 const OFFSCREEN_PATH = "offscreen.html";
 let running = false;
+let currentVad = null;
 
 async function hasOffscreen() {
   const contexts = await chrome.runtime.getContexts({
@@ -78,8 +79,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           throw new Error(r?.error || "offscreen 시작 실패");
         }
         running = true;
+        currentVad = msg.cfg.vad;
         await injectContentToAllTabs();
-        await broadcastToTabs({ type: "overlay-show" });
+        await broadcastToTabs({ type: "overlay-show", vad: currentVad });
         sendResponse({ ok: true });
       } catch (e) {
         running = false;
@@ -101,10 +103,24 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       return;
     }
     if (msg.type === "config-changed") {
-      // 실행 중이면 offscreen 에 설정 푸시
+      // 실행 중이면 offscreen 에 설정 푸시 + 모드 변경 시 content scripts 에도 알림
       if (running) {
         try { await chrome.runtime.sendMessage({ type: "offscreen-config", cfg: msg.cfg }); } catch {}
+        if (msg.cfg.vad && msg.cfg.vad !== currentVad) {
+          currentVad = msg.cfg.vad;
+          await broadcastToTabs({ type: "overlay-show", vad: currentVad });
+        }
       }
+      sendResponse({ ok: true });
+      return;
+    }
+    if (msg.type === "ptt-down") {
+      if (running) { try { await chrome.runtime.sendMessage({ type: "offscreen-ptt-down" }); } catch {} }
+      sendResponse({ ok: true });
+      return;
+    }
+    if (msg.type === "ptt-up") {
+      if (running) { try { await chrome.runtime.sendMessage({ type: "offscreen-ptt-up" }); } catch {} }
       sendResponse({ ok: true });
       return;
     }
@@ -126,7 +142,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       return;
     }
     if (msg.type === "ping-running") {
-      sendResponse({ running });
+      sendResponse({ running, vad: currentVad });
       return;
     }
   })();
@@ -136,6 +152,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 // 새 탭/페이지에 자막 바 표시 상태 동기화
 chrome.tabs.onUpdated.addListener((tabId, info) => {
   if (info.status === "complete" && running) {
-    chrome.tabs.sendMessage(tabId, { type: "overlay-show" }).catch(() => {});
+    chrome.tabs.sendMessage(tabId, { type: "overlay-show", vad: currentVad }).catch(() => {});
   }
 });
