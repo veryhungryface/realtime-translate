@@ -130,8 +130,11 @@ function handleEvent(evt) {
   }
   if (t === "response.output_item.done") return; // 중복 방지
   if (t === "error") {
-    console.error("[oai] error", evt);
-    sendStatus({ error: evt.error?.message || "Realtime API error" });
+    const e = evt.error || {};
+    const detail = `${e.type || "error"}${e.code ? "/" + e.code : ""}: ${e.message || JSON.stringify(evt)}`;
+    console.error("[oai] error", detail, evt);
+    sendStatus({ error: detail });
+    sendCaption("⚠ " + detail, false);
   }
 }
 
