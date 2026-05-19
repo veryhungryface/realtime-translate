@@ -82,12 +82,12 @@
           box-shadow: 0 0 16px rgba(74, 222, 128, 0.6);
         }
         .bar.ptt-mode #text:empty::before {
-          content: "🎙️ 버튼/스페이스바를 누르고 한국어로 말하세요";
+          content: "🎙️ 버튼 또는 왼쪽 Shift 키를 누르고 한국어로 말하세요";
         }
       </style>
       <div class="bar hidden" id="bar" dir="auto">
         <span class="live">● LIVE</span>
-        <button class="ptt" id="ptt" title="누르고 있는 동안 녹음 (Space)">🎙 PUSH</button>
+        <button class="ptt" id="ptt" title="누르고 있는 동안 녹음 (왼쪽 Shift)">🎙 PUSH</button>
         <span id="text"></span>
         <button class="close" id="close" title="이 탭에서 자막 숨김 (더블클릭으로 토글)">✕</button>
       </div>
@@ -122,19 +122,14 @@
     pttBtn.addEventListener("touchstart", (e) => { e.preventDefault(); pttDown(); }, { passive: false });
     window.addEventListener("mouseup", pttUp);
     window.addEventListener("touchend", pttUp);
-    // Space 키 — 입력 필드에 포커스 없을 때만
+    // 왼쪽 Shift 키 — 입력 필드 포커스 무관 (Shift 단독은 입력에 영향 없음)
+    const isLeftShift = (e) => e.code === "ShiftLeft";
     window.addEventListener("keydown", (e) => {
-      if (e.code !== "Space" || e.repeat || !pttMode) return;
-      const a = document.activeElement;
-      if (a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA" || a.isContentEditable)) return;
-      e.preventDefault(); e.stopPropagation();
+      if (!pttMode || e.repeat || !isLeftShift(e)) return;
       pttDown();
     }, true);
     window.addEventListener("keyup", (e) => {
-      if (e.code !== "Space" || !pttMode) return;
-      const a = document.activeElement;
-      if (a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA" || a.isContentEditable)) return;
-      e.preventDefault(); e.stopPropagation();
+      if (!pttMode || !isLeftShift(e)) return;
       pttUp();
     }, true);
   }
