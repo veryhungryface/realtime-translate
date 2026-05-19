@@ -3,6 +3,14 @@ const apiKeyEl = $("apiKey"), langEl = $("lang"), voiceEl = $("voice"), vadEl = 
 const gateEl = $("localGate"), gateThrEl = $("gateThreshold"), gateThrVal = $("gateThresholdVal");
 function fmtGate(v) { return (parseInt(v, 10) / 100).toFixed(2); }
 gateThrEl.addEventListener("input", () => { gateThrVal.textContent = fmtGate(gateThrEl.value); });
+
+function applyGateEnabled() {
+  const on = gateEl.checked;
+  gateThrEl.disabled = !on;
+  gateThrEl.style.opacity = on ? "1" : "0.4";
+  gateThrVal.style.opacity = on ? "1" : "0.4";
+}
+gateEl.addEventListener("change", applyGateEnabled);
 const startBtn = $("startBtn"), stopBtn = $("stopBtn"), statusEl = $("status");
 
 // 설정 로드
@@ -15,6 +23,7 @@ chrome.storage.local.get(["apiKey", "lang", "voice", "vad", "noise", "muteTts", 
   if (cfg.muteTts) muteEl.checked = !!cfg.muteTts;
   if (cfg.localGate) gateEl.checked = !!cfg.localGate;
   if (cfg.gateThreshold) { gateThrEl.value = cfg.gateThreshold; gateThrVal.textContent = fmtGate(cfg.gateThreshold); }
+  applyGateEnabled();
   setRunning(!!cfg.running);
 });
 
