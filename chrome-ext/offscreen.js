@@ -15,6 +15,11 @@ let gateCtx = null, gateNode = null, gateAnalyser = null, gateTimer = null;
 let currentCfg = null;
 let enBuffer = "";
 let responseActive = false;
+let serverResponseActive = false; // 서버 측 response 진행 여부 (response.created ~ response.done)
+const BENIGN_ERROR_CODES = new Set([
+  "conversation_already_has_active_response",
+  "input_audio_buffer_commit_empty",
+]);
 
 const ttsAudio = document.getElementById("tts");
 
@@ -191,6 +196,8 @@ async function start(cfg) {
 
 function handleEvent(evt) {
   const t = evt.type || "";
+  if (t === "response.created") serverResponseActive = true;
+  if (t === "response.done") serverResponseActive = false;
   // 출력 transcript 스트리밍
   if (/^response\.(output_)?(audio_transcript|text)\.delta$/.test(t) && evt.delta) {
     if (!responseActive) {
@@ -211,7 +218,13 @@ function handleEvent(evt) {
   if (t === "response.output_item.done") return; // 중복 방지
   if (t === "error") {
     const e = evt.error || {};
-    const detail = `${e.type || "error"}${e.code ? "/" + e.code : ""}: ${e.message || JSON.stringify(evt)}`;
+    const code = e.code || "";
+    const detail = `${e.type || "error"}${code ? "/" + code : ""}: ${e.message || JSON.stringify(evt)}`;
+    // 일시적/예상된 에러는 콘솔만 남기고 화면에는 안 띄움
+    if (BENIGN_ERROR_CODES.has(code)) {
+      console.warn("[oai] benign error (suppressed)", detail);
+      return;
+    }
     console.error("[oai] error", detail, evt);
     sendStatus({ error: detail });
     sendCaption("⚠ " + detail, false);
@@ -254,7 +267,12 @@ function pttUp() {
   if (dc && dc.readyState === "open") {
     try {
       dc.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
-      dc.send(JSON.stringify({ type: "response.create" }));
+      // 이미 진행 중인 응답이 있으면 새 응답 만들지 않음 (서버가 거부)
+      if (!serverResponseActive) {
+        dc.send(JSON.stringify({ type: "response.create" }));
+      } else {
+        console.warn("[oai] PTT: 이전 응답 진행 중 → 이번 발화는 큐에 쌓이고 자동 처리됨");
+      }
     } catch (e) { console.error(e); }
   }
 }
