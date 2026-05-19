@@ -136,9 +136,18 @@ async function start(cfg) {
   enBuffer = "";
   responseActive = false;
 
+  // AGC(Auto Gain Control)는 멀리서 나는 소리를 자동으로 증폭해서
+  // 가까운 내 목소리와 비슷한 음량으로 만들어버린다 — 잡음 환경에서는 끔.
+  const noiseLvl = cfg.noise || "normal";
+  const disableAgc = noiseLvl === "noisy" || noiseLvl === "veryNoisy" || !!cfg.localGate;
   rawMicStream = await navigator.mediaDevices.getUserMedia({
-    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    audio: {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: !disableAgc,
+    },
   });
+  console.log("[mic] AGC =", !disableAgc, "noise level =", noiseLvl);
   // 로컬 게이트 적용 시 원본 → 게이트 → 전송 스트림
   if (cfg.localGate) {
     const openLevel = (cfg.gateThreshold || 8) / 100;
