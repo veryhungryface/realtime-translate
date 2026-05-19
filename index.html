@@ -290,20 +290,22 @@ const vadState = {
 
 function buildTurnDetection() {
   const m = vadModeSel.value;
+  // interrupt_response: false → 잡음/추가 발화로 진행 중인 번역 응답이 끊기지 않음
+  const common = { create_response: true, interrupt_response: false };
   if (m === "server") {
     return {
       type: "server_vad",
       threshold: vadState.serverThreshold,
       silence_duration_ms: vadState.serverSilenceMs,
       prefix_padding_ms: 300,
-      create_response: true,
+      ...common,
     };
   }
   if (m === "semantic") {
     return {
       type: "semantic_vad",
       eagerness: vadState.semanticEagerness,
-      create_response: true,
+      ...common,
     };
   }
   return null; // PTT: 서버 자동 턴 종료 끔

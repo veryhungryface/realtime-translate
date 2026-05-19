@@ -25,10 +25,13 @@ Keep the speaker's tone, register, and intent. Always reply in ${lang} only.`;
 }
 
 function buildTurnDetection(mode) {
+  // interrupt_response: false → 모델이 번역 발화 중일 때 들어온 새 오디오로
+  // 진행 중 응답을 끊지 않음. 잡음에 의한 중단 방지.
+  const common = { create_response: true, interrupt_response: false };
   if (mode === "server") {
-    return { type: "server_vad", threshold: 0.55, silence_duration_ms: 700, prefix_padding_ms: 300, create_response: true };
+    return { type: "server_vad", threshold: 0.55, silence_duration_ms: 700, prefix_padding_ms: 300, ...common };
   }
-  return { type: "semantic_vad", eagerness: "auto", create_response: true };
+  return { type: "semantic_vad", eagerness: "auto", ...common };
 }
 
 function buildSessionUpdate(cfg) {
