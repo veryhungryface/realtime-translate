@@ -1,17 +1,19 @@
 // 활성 페이지 상단에 얇은 자막 바를 주입한다.
 (() => {
-  const VERSION = 5;
+  const VERSION = 6;
   if (window.__rttOverlayVersion >= VERSION) return;
-  // 이전 버전이 살아있으면 DOM 만 제거 (이벤트 리스너는 페이지 새로고침 전까지 그대로)
-  const oldHost = document.getElementById("__rtt_overlay_host__");
-  if (oldHost) oldHost.remove();
+
+  // 이전 버전의 자막 바를 *전부* 제거 (확장 reload 누적되면 여러 개 떠있을 수 있음)
+  const HOST_PREFIX = "__rtt_overlay_host";
+  document.querySelectorAll(`[id^="${HOST_PREFIX}"]`).forEach((n) => n.remove());
   if (window.__rttOverlayVersion) {
-    console.warn("[rtt] 이전 버전 content script 감지 — 페이지 새로고침(Cmd+R) 권장.");
+    console.warn("[rtt] 이전 버전 content script 감지 — Cmd+R 로 페이지 새로고침해야 옛 리스너까지 정리됨.");
   }
   window.__rttOverlayVersion = VERSION;
   window.__rttOverlayInjected = true;
 
-  const HOST_ID = "__rtt_overlay_host__";
+  // 인스턴스별 고유 ID — 다음 새 버전이 prefix 로 일괄 제거 가능
+  const HOST_ID = HOST_PREFIX + "_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
   let host = null, shadow = null, bar = null, text = null;
 
   function ensureBar() {
