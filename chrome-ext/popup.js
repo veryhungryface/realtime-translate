@@ -13,8 +13,8 @@ function applyGateEnabled() {
 gateEl.addEventListener("change", applyGateEnabled);
 const startBtn = $("startBtn"), stopBtn = $("stopBtn"), statusEl = $("status");
 
-// 설정 로드
-chrome.storage.local.get(["apiKey", "lang", "voice", "vad", "noise", "muteTts", "localGate", "gateThreshold", "running"], (cfg) => {
+// 설정 로드 + background에서 실제 실행 상태 확인
+chrome.storage.local.get(["apiKey", "lang", "voice", "vad", "noise", "muteTts", "localGate", "gateThreshold"], (cfg) => {
   if (cfg.apiKey) apiKeyEl.value = cfg.apiKey;
   if (cfg.lang) langEl.value = cfg.lang;
   if (cfg.voice) voiceEl.value = cfg.voice;
@@ -24,8 +24,10 @@ chrome.storage.local.get(["apiKey", "lang", "voice", "vad", "noise", "muteTts", 
   if (cfg.localGate) gateEl.checked = !!cfg.localGate;
   if (cfg.gateThreshold) { gateThrEl.value = cfg.gateThreshold; gateThrVal.textContent = fmtGate(cfg.gateThreshold); }
   applyGateEnabled();
-  setRunning(!!cfg.running);
 });
+chrome.runtime.sendMessage({ type: "ping-running" }).then((res) => {
+  setRunning(!!res?.running);
+}).catch(() => setRunning(false));
 
 function setRunning(on) {
   startBtn.disabled = on;
