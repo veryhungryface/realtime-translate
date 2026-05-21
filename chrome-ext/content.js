@@ -1,6 +1,6 @@
 // 활성 페이지 상단에 얇은 자막 바를 주입한다.
 (() => {
-  const VERSION = 7;
+  const VERSION = 8;
   if (window.__rttOverlayVersion >= VERSION) return;
 
   const HOST_PREFIX = "__rtt_overlay_host";
@@ -14,19 +14,12 @@
     });
     return removed;
   }
-  const initialRemoved = purgeOthers();
-  if (initialRemoved > 0) {
-    console.debug(`[rtt v${VERSION}] 옛 자막바 ${initialRemoved}개 제거`);
-  }
-
+  purgeOthers(); // 초기 청소
   window.__rttOverlayVersion = VERSION;
   window.__rttOverlayInjected = true;
 
-  // 정기 청소: 2초마다 다른 인스턴스가 그려놓은 바가 있으면 즉시 제거
-  setInterval(() => {
-    const n = purgeOthers();
-    if (n > 0) console.debug(`[rtt v${VERSION}] janitor: 옛 바 ${n}개 추가 제거`);
-  }, 2000);
+  // 정기 청소: 2초마다 다른 인스턴스 바 발견되면 제거 (조용히)
+  setInterval(purgeOthers, 2000);
   let host = null, shadow = null, bar = null, text = null;
 
   function ensureBar() {
