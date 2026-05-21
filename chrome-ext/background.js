@@ -142,7 +142,19 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       return;
     }
     if (msg.type === "ping-running") {
-      sendResponse({ running, vad: currentVad });
+      // SW가 idle로 죽었다 살아났을 수 있으므로 메모리 변수 대신 실제 offscreen 존재 여부 확인
+      const live = await hasOffscreen();
+      if (live && !running) {
+        // SW 재시작 후 상태 복구
+        running = true;
+        const stored = await chrome.storage.local.get(["vad"]);
+        if (stored.vad) currentVad = stored.vad;
+      }
+      if (!live && running) {
+        running = false;
+        currentVad = null;
+      }
+      sendResponse({ running: live, vad: currentVad });
       return;
     }
   })();
@@ -150,8 +162,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 // 새 탭/페이지에 자막 바 표시 상태 동기화
-chrome.tabs.onUpdated.addListener((tabId, info) => {
-  if (info.status === "complete" && running) {
-    chrome.tabs.sendMessage(tabId, { type: "overlay-show", vad: currentVad }).catch(() => {});
+chrome.tabs.onUpdated.addListener(async (tabId, info) => {
+  if (info.status !== "complete") return;
+  // 메모리 변수 대신 실제 offscreen 상태 확인 (SW가 재시작됐을 수 있음)
+  const live = await hasOffscreen();
+  if (!live) return;
+  if (!running) {
+    running = true;
+    const stored = await chrome.storage.local.get(["vad"]);
+    if (stored.vad) currentVad = stored.vad;
   }
+  chrome.tabs.sendMessage(tabId, { type: "overlay-show", vad: currentVad }).catch(() => {});
 });
