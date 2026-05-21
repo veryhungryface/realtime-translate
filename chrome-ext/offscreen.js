@@ -271,7 +271,7 @@ function handleEvent(evt) {
     const detail = `${e.type || "error"}${code ? "/" + code : ""}: ${e.message || JSON.stringify(evt)}`;
     // 일시적/예상된 에러는 콘솔만 남기고 화면에는 안 띄움
     if (BENIGN_ERROR_CODES.has(code)) {
-      console.warn("[oai] benign error (suppressed)", detail);
+      console.debug("[oai] benign error (suppressed)", detail);
       return;
     }
     console.error("[oai] error", detail, evt);

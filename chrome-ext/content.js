@@ -16,7 +16,7 @@
   }
   const initialRemoved = purgeOthers();
   if (initialRemoved > 0) {
-    console.warn(`[rtt v${VERSION}] 옛 자막바 ${initialRemoved}개 제거. (페이지 Cmd+R 권장 — 옛 리스너까지 완전 정리)`);
+    console.debug(`[rtt v${VERSION}] 옛 자막바 ${initialRemoved}개 제거`);
   }
 
   window.__rttOverlayVersion = VERSION;
@@ -25,7 +25,7 @@
   // 정기 청소: 2초마다 다른 인스턴스가 그려놓은 바가 있으면 즉시 제거
   setInterval(() => {
     const n = purgeOthers();
-    if (n > 0) console.warn(`[rtt v${VERSION}] janitor: 옛 바 ${n}개 추가 제거`);
+    if (n > 0) console.debug(`[rtt v${VERSION}] janitor: 옛 바 ${n}개 추가 제거`);
   }, 2000);
   let host = null, shadow = null, bar = null, text = null;
 
