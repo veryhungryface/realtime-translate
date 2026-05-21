@@ -1,19 +1,32 @@
 // 활성 페이지 상단에 얇은 자막 바를 주입한다.
 (() => {
-  const VERSION = 6;
+  const VERSION = 7;
   if (window.__rttOverlayVersion >= VERSION) return;
 
-  // 이전 버전의 자막 바를 *전부* 제거 (확장 reload 누적되면 여러 개 떠있을 수 있음)
   const HOST_PREFIX = "__rtt_overlay_host";
-  document.querySelectorAll(`[id^="${HOST_PREFIX}"]`).forEach((n) => n.remove());
-  if (window.__rttOverlayVersion) {
-    console.warn("[rtt] 이전 버전 content script 감지 — Cmd+R 로 페이지 새로고침해야 옛 리스너까지 정리됨.");
+  const HOST_ID = HOST_PREFIX + "_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
+
+  // 초기 청소: 이전 모든 버전이 만든 자막바 전부 제거
+  function purgeOthers() {
+    let removed = 0;
+    document.querySelectorAll(`[id^="${HOST_PREFIX}"]`).forEach((n) => {
+      if (n.id !== HOST_ID) { n.remove(); removed++; }
+    });
+    return removed;
   }
+  const initialRemoved = purgeOthers();
+  if (initialRemoved > 0) {
+    console.warn(`[rtt v${VERSION}] 옛 자막바 ${initialRemoved}개 제거. (페이지 Cmd+R 권장 — 옛 리스너까지 완전 정리)`);
+  }
+
   window.__rttOverlayVersion = VERSION;
   window.__rttOverlayInjected = true;
 
-  // 인스턴스별 고유 ID — 다음 새 버전이 prefix 로 일괄 제거 가능
-  const HOST_ID = HOST_PREFIX + "_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
+  // 정기 청소: 2초마다 다른 인스턴스가 그려놓은 바가 있으면 즉시 제거
+  setInterval(() => {
+    const n = purgeOthers();
+    if (n > 0) console.warn(`[rtt v${VERSION}] janitor: 옛 바 ${n}개 추가 제거`);
+  }, 2000);
   let host = null, shadow = null, bar = null, text = null;
 
   function ensureBar() {
@@ -164,6 +177,8 @@
   }
 
   chrome.runtime.onMessage.addListener((msg) => {
+    // 메시지 받을 때마다 다른 인스턴스 잔재 청소
+    purgeOthers();
     if (msg.type === "caption") setCaption(msg.text, msg.streaming, msg.lang);
     else if (msg.type === "overlay-show") { show(); setPttMode(msg.vad === "ptt"); }
     else if (msg.type === "overlay-hide") { hide(); setPttMode(false); }
